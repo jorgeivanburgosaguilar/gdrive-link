@@ -40,6 +40,31 @@
 	let fingerprintHash = $state('Collecting...');
 	let refreshedAt = $state('Pending');
 	let status = $state('Reading browser APIs...');
+	let copied = $state(false);
+
+	let jsonOutput = $derived(
+		JSON.stringify(
+			{
+				hash: fingerprintHash,
+				refreshedAt,
+				status,
+				server: {
+					requestUrl: data.requestUrl,
+					host: data.host,
+					protocol: data.protocol,
+					headers: Object.fromEntries(data.requestHeaders.map(h => [h.label, h.value]))
+				},
+				browser: Object.fromEntries(
+					fingerprintSections.map(s => [
+						s.title,
+						Object.fromEntries(s.fields.map(f => [f.label, f.value]))
+					])
+				)
+			},
+			null,
+			2
+		)
+	);
 
 	function stringifyValue(value: unknown): string {
 		if (value === null || value === undefined || value === '') return 'Unavailable';
@@ -482,9 +507,10 @@
 		status = 'Ready';
 	}
 
-	function handleRefresh(event: SubmitEvent) {
-		event.preventDefault();
-		void collectFingerprint();
+	async function copyToClipboard() {
+		await navigator.clipboard.writeText(jsonOutput);
+		copied = true;
+		setTimeout(() => (copied = false), 2000);
 	}
 
 	onMount(() => {
@@ -511,78 +537,20 @@
 		</p>
 	</header>
 
-	<form class="fingerprint-form" onsubmit={handleRefresh}>
-		<section class="summary-grid">
-			<label class="summary-card">
-				<span>Fingerprint hash</span>
-				<textarea readonly rows="3">{fingerprintHash}</textarea>
-			</label>
+	<div class="toolbar">
+		<div class="meta">
+			<span class="hash-label">Hash</span>
+			<code class="hash-value">{fingerprintHash.slice(0, 16)}…</code>
+			<span class="status-badge">{status}</span>
+			<span class="refresh-time">{refreshedAt}</span>
+		</div>
+		<div class="actions">
+			<button onclick={copyToClipboard}>{copied ? 'Copied!' : 'Copy JSON'}</button>
+			<button onclick={() => void collectFingerprint()}>Refresh</button>
+		</div>
+	</div>
 
-			<label class="summary-card">
-				<span>Status</span>
-				<input readonly value={status} />
-			</label>
-
-			<label class="summary-card">
-				<span>Last refresh</span>
-				<input readonly value={refreshedAt} />
-			</label>
-
-			<label class="summary-card">
-				<span>Request URL</span>
-				<input readonly value={data.requestUrl} />
-			</label>
-
-			<label class="summary-card">
-				<span>Host</span>
-				<input readonly value={data.host} />
-			</label>
-
-			<label class="summary-card">
-				<span>Protocol</span>
-				<input readonly value={data.protocol} />
-			</label>
-		</section>
-
-		<section class="panel">
-			<div class="panel-header">
-				<div>
-					<h2>Request headers</h2>
-					<p>Values seen by the server for this page request.</p>
-				</div>
-				<button type="submit">Refresh current session</button>
-			</div>
-
-			<div class="field-grid">
-				{#each data.requestHeaders as field (field.key)}
-					<label class="field">
-						<span>{field.label}</span>
-						<textarea readonly rows="2">{field.value}</textarea>
-					</label>
-				{/each}
-			</div>
-		</section>
-
-		{#each fingerprintSections as section (section.title)}
-			<section class="panel">
-				<div class="panel-header">
-					<div>
-						<h2>{section.title}</h2>
-						<p>{section.description}</p>
-					</div>
-				</div>
-
-				<div class="field-grid">
-					{#each section.fields as field (field.key)}
-						<label class="field">
-							<span>{field.label}</span>
-							<textarea readonly rows="3">{field.value}</textarea>
-						</label>
-					{/each}
-				</div>
-			</section>
-		{/each}
-	</form>
+	<pre class="json-block"><code>{jsonOutput}</code></pre>
 </div>
 
 <style>
@@ -628,78 +596,75 @@
 		color: #4f4438;
 	}
 
-	.fingerprint-form {
-		display: grid;
-		gap: 1.25rem;
-	}
-
-	.summary-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	.toolbar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
 		gap: 1rem;
+		flex-wrap: wrap;
+		margin-bottom: 1.25rem;
+		padding: 0.75rem 1rem;
+		border: 1px solid rgba(31, 27, 22, 0.12);
+		border-radius: 1rem;
+		background: rgba(255, 252, 246, 0.92);
 	}
 
-	.summary-card,
-	.field {
-		display: grid;
+	.meta {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		flex-wrap: wrap;
+		font-size: 0.9rem;
+	}
+
+	.hash-label {
+		font-weight: 700;
+		color: #5a4a35;
+		font-size: 0.84rem;
+	}
+
+	.hash-value {
+		font-family: 'Consolas', 'Courier New', monospace;
+		font-size: 0.85rem;
+		color: #1f1b16;
+	}
+
+	.status-badge {
+		padding: 0.2rem 0.6rem;
+		border-radius: 999px;
+		background: #1f1b16;
+		color: #fff8e8;
+		font-size: 0.78rem;
+		font-weight: 700;
+	}
+
+	.refresh-time {
+		color: #655748;
+		font-size: 0.85rem;
+	}
+
+	.actions {
+		display: flex;
 		gap: 0.5rem;
 	}
 
-	.panel {
-		padding: 1.25rem;
+	.json-block {
+		margin: 0;
+		padding: 1.5rem;
 		border: 1px solid rgba(31, 27, 22, 0.12);
 		border-radius: 1.25rem;
 		background: rgba(255, 252, 246, 0.92);
 		box-shadow: 0 18px 40px rgba(75, 62, 42, 0.08);
-	}
-
-	.panel-header {
-		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-		gap: 1rem;
-		margin-bottom: 1rem;
-	}
-
-	.panel-header h2 {
-		margin: 0;
-		font-size: 1.15rem;
-	}
-
-	.panel-header p {
-		margin: 0.35rem 0 0;
-		color: #655748;
-	}
-
-	.field-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-		gap: 1rem;
-	}
-
-	span {
-		font-size: 0.84rem;
-		font-weight: 700;
-		color: #5a4a35;
-	}
-
-	input,
-	textarea {
-		width: 100%;
-		border: 1px solid rgba(31, 27, 22, 0.14);
-		border-radius: 0.9rem;
-		background: #fffdfa;
+		font-family: 'Consolas', 'Courier New', monospace;
+		font-size: 0.88rem;
+		line-height: 1.6;
+		overflow-x: auto;
+		white-space: pre;
 		color: #1f1b16;
-		padding: 0.8rem 0.9rem;
-		font:
-			500 0.95rem/1.45 'Consolas',
-			'Courier New',
-			monospace;
 	}
 
-	textarea {
-		resize: vertical;
-		min-height: 4.75rem;
+	.json-block code {
+		font: inherit;
 	}
 
 	button {
@@ -715,14 +680,6 @@
 	@media (max-width: 720px) {
 		.page-shell {
 			padding-top: 2rem;
-		}
-
-		.panel-header {
-			flex-direction: column;
-		}
-
-		button {
-			width: 100%;
 		}
 	}
 </style>
