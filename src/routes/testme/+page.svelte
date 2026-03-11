@@ -49,15 +49,16 @@
 				refreshedAt,
 				status,
 				server: {
+					clientIp: data.clientIp,
 					requestUrl: data.requestUrl,
 					host: data.host,
 					protocol: data.protocol,
-					headers: Object.fromEntries(data.requestHeaders.map(h => [h.label, h.value]))
+					headers: Object.fromEntries(data.requestHeaders.map((h) => [h.label, h.value]))
 				},
 				browser: Object.fromEntries(
-					fingerprintSections.map(s => [
+					fingerprintSections.map((s) => [
 						s.title,
-						Object.fromEntries(s.fields.map(f => [f.label, f.value]))
+						Object.fromEntries(s.fields.map((f) => [f.label, f.value]))
 					])
 				)
 			},

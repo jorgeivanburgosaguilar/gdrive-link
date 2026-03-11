@@ -2,7 +2,7 @@ import { error } from '@sveltejs/kit';
 
 import type { PageServerLoad } from './$types';
 
-const REDIRECT_DELAY_SECONDS = 5;
+const REDIRECT_DELAY_SECONDS = 90;
 const DRIVE_ORIGIN = 'https://drive.google.com';
 
 export const load: PageServerLoad = async ({ url }) => {
