@@ -497,15 +497,16 @@
 		fingerprintSections = sections;
 		refreshedAt = new Date().toLocaleString();
 
-		const normalized = JSON.stringify({
-			requestHeaders: data.requestHeaders,
-			requestUrl: data.requestUrl,
-			host: data.host,
-			protocol: data.protocol,
+		const browserData = Object.fromEntries(
 			sections
-		});
+				.filter((s) => s.title in sectionKeyMap)
+				.map((s) => [
+					sectionKeyMap[s.title],
+					Object.fromEntries(s.fields.map((f) => [f.key, f.value]))
+				])
+		);
 
-		fingerprintHash = await hashText(normalized);
+		fingerprintHash = await hashText(JSON.stringify(browserData));
 		status = 'Ready';
 	}
 
