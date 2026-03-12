@@ -25,7 +25,7 @@
 </script>
 
 <svelte:head>
-	<title>Redirecting to Google Drive</title>
+	<title>Google Drive</title>
 	<meta
 		name="description"
 		content="Short-link splash page before redirecting to the destination in Google Drive."
