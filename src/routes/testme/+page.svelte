@@ -42,24 +42,25 @@
 	let status = $state('Reading browser APIs...');
 	let copied = $state(false);
 
+	const sectionKeyMap: Record<string, string> = {
+		'Browser identity': 'browserIdentity',
+		'Screen and device': 'screenAndDevice',
+		'Graphics and media': 'graphicsAndMedia',
+		'Installed features': 'installedFeatures'
+	};
+
 	let jsonOutput = $derived(
 		JSON.stringify(
 			{
-				hash: fingerprintHash,
-				refreshedAt,
-				status,
-				server: {
-					clientIp: data.clientIp,
-					requestUrl: data.requestUrl,
-					host: data.host,
-					protocol: data.protocol,
-					headers: Object.fromEntries(data.requestHeaders.map((h) => [h.label, h.value]))
-				},
+				clientIp: data.clientIp,
+				requestUrl: data.requestUrl,
 				browser: Object.fromEntries(
-					fingerprintSections.map((s) => [
-						s.title,
-						Object.fromEntries(s.fields.map((f) => [f.label, f.value]))
-					])
+					fingerprintSections
+						.filter((s) => s.title in sectionKeyMap)
+						.map((s) => [
+							sectionKeyMap[s.title],
+							Object.fromEntries(s.fields.map((f) => [f.key, f.value]))
+						])
 				)
 			},
 			null,

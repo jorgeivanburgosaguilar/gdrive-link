@@ -10,7 +10,8 @@ describe('/testme/+page.svelte', () => {
 				requestHeaders: [],
 				requestUrl: 'http://localhost/testme',
 				host: 'localhost',
-				protocol: 'http'
+				protocol: 'http',
+				clientIp: '127.0.0.1'
 			}
 		});
 

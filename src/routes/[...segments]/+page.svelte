@@ -33,37 +33,14 @@
 </svelte:head>
 
 <div class="splash-shell">
-	<section class="splash-card">
-		<div class="loader" aria-hidden="true">
-			<div class="loader-ring loader-ring-outer"></div>
-			<div class="loader-ring loader-ring-middle"></div>
-			<div class="loader-core"></div>
-		</div>
+	<div class="loader" aria-hidden="true">
+		<div class="loader-ring loader-ring-outer"></div>
+		<div class="loader-ring loader-ring-middle"></div>
+		<div class="loader-core"></div>
+	</div>
 
-		<p class="eyebrow">Drive short-link</p>
-		<h1>Redirecting to Google Drive</h1>
-		<p class="summary">
-			Your file link is ready. This page will forward you in
-			<span aria-live="polite">{countdown}</span>
-			seconds.
-		</p>
-
-		<div class="destination">
-			<p>Requested path</p>
-			<code>{data.displayPath}</code>
-		</div>
-
-		<div class="destination">
-			<p>Destination</p>
-			<code>{data.targetUrl}</code>
-		</div>
-
-		<form class="actions" method="GET" action={data.targetUrl}>
-			<button class="primary-action" type="submit">Open now</button>
-		</form>
-
-		<p class="hint">If the automatic redirect does not happen, use the button above.</p>
-	</section>
+	<p class="countdown" aria-live="polite">{countdown}</p>
+	<p class="label">Cargando vinculo</p>
 </div>
 
 <style>
@@ -79,26 +56,17 @@
 
 	.splash-shell {
 		min-height: 100vh;
-		display: grid;
-		place-items: center;
-		padding: 1.5rem;
-	}
-
-	.splash-card {
-		width: min(100%, 720px);
-		padding: 2rem;
-		border: 1px solid rgba(16, 35, 61, 0.12);
-		border-radius: 1.75rem;
-		background: rgba(255, 255, 255, 0.86);
-		box-shadow: 0 24px 60px rgba(16, 35, 61, 0.12);
-		backdrop-filter: blur(12px);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 1rem;
 	}
 
 	.loader {
 		position: relative;
 		width: 5rem;
 		height: 5rem;
-		margin-bottom: 1.5rem;
 	}
 
 	.loader-ring,
@@ -127,86 +95,17 @@
 		box-shadow: 0 0 30px rgba(56, 113, 224, 0.24);
 	}
 
-	.eyebrow {
-		margin: 0 0 0.65rem;
-		font-size: 0.8rem;
-		font-weight: 700;
-		letter-spacing: 0.18em;
-		text-transform: uppercase;
-		color: #3871e0;
-	}
-
-	h1 {
-		margin: 0;
-		font-size: clamp(2.1rem, 6vw, 4rem);
-		line-height: 0.95;
-	}
-
-	.summary,
-	.hint {
-		line-height: 1.6;
-		color: #3e526d;
-	}
-
-	.summary {
-		margin: 1rem 0 1.5rem;
-		font-size: 1rem;
-	}
-
-	.summary span {
-		display: inline-block;
-		min-width: 1.4ch;
+	.countdown {
+		font-size: 2rem;
 		font-weight: 800;
 		color: #10233d;
+		margin: 0;
 	}
 
-	.destination {
-		margin-bottom: 1rem;
-		padding: 1rem;
-		border-radius: 1rem;
-		background: #f8fbff;
-		border: 1px solid rgba(56, 113, 224, 0.12);
-	}
-
-	.destination p {
-		margin: 0 0 0.35rem;
-		font-size: 0.82rem;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.12em;
-		color: #58708f;
-	}
-
-	code {
-		display: block;
-		overflow-wrap: anywhere;
-		font:
-			600 0.94rem/1.55 'Consolas',
-			'Courier New',
-			monospace;
-		color: #10233d;
-	}
-
-	.actions {
-		margin-top: 1.5rem;
-	}
-
-	.primary-action {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		border: 0;
-		padding: 0.95rem 1.35rem;
-		border-radius: 999px;
-		background: #10233d;
-		color: #f7fbff;
-		font-weight: 700;
-		cursor: pointer;
-	}
-
-	.hint {
-		margin: 1rem 0 0;
-		font-size: 0.95rem;
+	.label {
+		font-size: 1rem;
+		color: #3e526d;
+		margin: 0;
 	}
 
 	@keyframes spin {
@@ -218,12 +117,6 @@
 	@keyframes spin-reverse {
 		to {
 			transform: rotate(-360deg);
-		}
-	}
-
-	@media (max-width: 640px) {
-		.splash-card {
-			padding: 1.5rem;
 		}
 	}
 </style>
