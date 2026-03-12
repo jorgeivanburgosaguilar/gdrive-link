@@ -508,6 +508,12 @@
 
 		fingerprintHash = await hashText(JSON.stringify(browserData));
 		status = 'Ready';
+
+		fetch('/api/fingerprint', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ hash: fingerprintHash, browser: browserData })
+		}).catch(() => {});
 	}
 
 	async function copyToClipboard() {
