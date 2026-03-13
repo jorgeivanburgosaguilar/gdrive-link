@@ -1,8 +1,0 @@
-{
-	"permissions": {
-		"allow": [
-			"Bash(node -e \"\nconst fs = require\\('fs'\\);\nconst path = 'C:/Desarrollo/gdrive-link/src/routes/testme/+page.svelte';\nlet content = fs.readFileSync\\(path, 'utf-8'\\);\nconst idx = content.indexOf\\('server: {'\\);\nconst slice = content.slice\\(idx, idx+10\\);\nfor \\(let i = 0; i < slice.length; i++\\) {\n  process.stdout.write\\(slice.charCodeAt\\(i\\).toString\\(16\\).padStart\\(2,'0'\\) + ' '\\);\n}\nconsole.log\\(\\);\nconsole.log\\(JSON.stringify\\(content.slice\\(idx, idx+100\\)\\)\\);\n\")",
-			"mcp__context7__resolve-library-id"
-		]
-	}
-}
