@@ -3,53 +3,53 @@ import type { RequestHandler } from './$types';
 import { db, initDb } from '$lib/server/db';
 
 export const POST: RequestHandler = async ({ request, getClientAddress }) => {
-	try {
-		const { hash, browser } = await request.json();
+  try {
+    const { hash, browser, referer } = await request.json();
 
-		if (!hash || !browser) {
-			return json({ error: 'Faltan campos requeridos' }, { status: 400 });
-		}
+    if (!hash || !browser) {
+      return json({ error: 'Faltan campos requeridos' }, { status: 400 });
+    }
 
-		const content = JSON.stringify(browser);
+    const content = JSON.stringify(browser);
 
-		await initDb();
+    await initDb();
 
-		let identityId: number;
-		let isNew = false;
+    let identityId: number;
+    let isNew = false;
 
-		const existing = await db.execute({
-			sql: 'SELECT id FROM identities WHERE hash = ?',
-			args: [hash]
-		});
+    const existing = await db.execute({
+      sql: 'SELECT id FROM identities WHERE hash = ?',
+      args: [hash]
+    });
 
-		if (existing.rows.length > 0) {
-			identityId = existing.rows[0].id as number;
-		} else {
-			const inserted = await db.execute({
-				sql: 'INSERT INTO identities (hash, content) VALUES (?, ?)',
-				args: [hash, content]
-			});
-			identityId = Number(inserted.lastInsertRowid);
-			isNew = true;
-		}
+    if (existing.rows.length > 0) {
+      identityId = existing.rows[0].id as number;
+    } else {
+      const inserted = await db.execute({
+        sql: 'INSERT INTO identities (hash, content) VALUES (?, ?)',
+        args: [hash, content]
+      });
+      identityId = Number(inserted.lastInsertRowid);
+      isNew = true;
+    }
 
-		let ip = 'unknown';
-		try {
-			ip = getClientAddress();
-		} catch {
-			ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown';
-		}
+    let ip = 'unknown';
+    try {
+      ip = getClientAddress();
+    } catch {
+      ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown';
+    }
 
-		const requestUrl = request.headers.get('referer') ?? request.url;
+    const requestUrl = request.headers.get('referer') ?? request.url;
 
-		await db.execute({
-			sql: 'INSERT INTO downloads (identity_id, ip, request_url) VALUES (?, ?, ?)',
-			args: [identityId, ip, requestUrl]
-		});
+    await db.execute({
+      sql: 'INSERT INTO downloads (identity_id, ip, request_url, referer) VALUES (?, ?, ?, ?)',
+      args: [identityId, ip, requestUrl, referer ?? null]
+    });
 
-		return json({ identityId, isNew });
-	} catch (error) {
-		console.error('Fingerprint endpoint error:', error);
-		return json({ error: 'Error interno del servidor' }, { status: 500 });
-	}
+    return json({ identityId, isNew });
+  } catch (error) {
+    console.error('Fingerprint endpoint error:', error);
+    return json({ error: 'Error interno del servidor' }, { status: 500 });
+  }
 };

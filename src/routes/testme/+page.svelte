@@ -1,694 +1,226 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+  import { onMount } from 'svelte';
 
-	import type { PageData } from './$types';
+  import type { PageData } from './$types';
+  import * as fingerprintLib from '$lib/fingerprint';
+  import { sectionKeyMap } from '$lib/fingerprint';
 
-	type Field = {
-		key: string;
-		label: string;
-		value: string;
-	};
+  import type { FingerprintSection } from '$lib/fingerprint';
 
-	type Section = {
-		title: string;
-		description: string;
-		fields: Field[];
-	};
+  let { data }: { data: PageData } = $props();
 
-	type NetworkInformation = {
-		effectiveType?: string;
-		downlink?: number;
-		rtt?: number;
-		saveData?: boolean;
-	};
+  let fingerprintSections = $state<FingerprintSection[]>([]);
+  let fingerprintHash = $state('Collecting...');
+  let refreshedAt = $state('Pending');
+  let status = $state('Reading browser APIs...');
+  let copied = $state(false);
 
-	type BatteryStatus = {
-		level: number;
-		charging: boolean;
-	};
+  let jsonOutput = $derived(
+    JSON.stringify(
+      {
+        clientIp: data.clientIp,
+        requestUrl: data.requestUrl,
+        browser: Object.fromEntries(
+          fingerprintSections
+            .filter((s) => s.title in sectionKeyMap)
+            .map((s) => [
+              sectionKeyMap[s.title],
+              Object.fromEntries(s.fields.map((f) => [f.key, f.value]))
+            ])
+        )
+      },
+      null,
+      2
+    )
+  );
 
-	type NavigatorWithExtras = Navigator & {
-		connection?: NetworkInformation;
-		deviceMemory?: number;
-		getBattery?: () => Promise<BatteryStatus>;
-		pdfViewerEnabled?: boolean;
-	};
+  async function collectFingerprint() {
+    status = 'Reading browser APIs...';
+    const result = await fingerprintLib.collectFingerprint();
+    fingerprintSections = result.sections;
+    refreshedAt = new Date().toLocaleString();
+    fingerprintHash = result.hash;
+    status = 'Ready';
+    fetch('/api/fingerprint', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hash: result.hash, browser: result.browserData })
+    }).catch(() => {});
+  }
 
-	let { data }: { data: PageData } = $props();
+  async function copyToClipboard() {
+    await navigator.clipboard.writeText(jsonOutput);
+    copied = true;
+    setTimeout(() => (copied = false), 2000);
+  }
 
-	let fingerprintSections = $state<Section[]>([]);
-	let fingerprintHash = $state('Collecting...');
-	let refreshedAt = $state('Pending');
-	let status = $state('Reading browser APIs...');
-	let copied = $state(false);
-
-	const sectionKeyMap: Record<string, string> = {
-		'Browser identity': 'browserIdentity',
-		'Screen and device': 'screenAndDevice',
-		'Graphics and media': 'graphicsAndMedia',
-		'Installed features': 'installedFeatures'
-	};
-
-	let jsonOutput = $derived(
-		JSON.stringify(
-			{
-				clientIp: data.clientIp,
-				requestUrl: data.requestUrl,
-				browser: Object.fromEntries(
-					fingerprintSections
-						.filter((s) => s.title in sectionKeyMap)
-						.map((s) => [
-							sectionKeyMap[s.title],
-							Object.fromEntries(s.fields.map((f) => [f.key, f.value]))
-						])
-				)
-			},
-			null,
-			2
-		)
-	);
-
-	function stringifyValue(value: unknown): string {
-		if (value === null || value === undefined || value === '') return 'Unavailable';
-		if (Array.isArray(value)) {
-			return value.length ? value.join(', ') : 'Unavailable';
-		}
-
-		return String(value);
-	}
-
-	function boolValue(value: boolean | undefined): string {
-		if (value === undefined) return 'Unavailable';
-		return value ? 'Yes' : 'No';
-	}
-
-	function detectStorage(type: 'localStorage' | 'sessionStorage'): string {
-		try {
-			const storage = window[type];
-			const key = `fingerprint-${type}`;
-			storage.setItem(key, '1');
-			storage.removeItem(key);
-			return 'Available';
-		} catch {
-			return 'Blocked';
-		}
-	}
-
-	function detectFonts(fonts: string[]): string[] {
-		const canvas = document.createElement('canvas');
-		const context = canvas.getContext('2d');
-
-		if (!context) return [];
-
-		const sample = 'mmmmmmmmmmlli';
-		const size = '72px';
-		const baseline = new Map(
-			['monospace', 'sans-serif', 'serif'].map((fallback) => {
-				context.font = `${size} ${fallback}`;
-				return [fallback, context.measureText(sample).width];
-			})
-		);
-
-		return fonts.filter((font) =>
-			['monospace', 'sans-serif', 'serif'].some((fallback) => {
-				context.font = `${size} "${font}", ${fallback}`;
-				return context.measureText(sample).width !== baseline.get(fallback);
-			})
-		);
-	}
-
-	async function hashText(input: string): Promise<string> {
-		if (!globalThis.crypto?.subtle) return 'Unavailable';
-
-		const encoded = new TextEncoder().encode(input);
-		const digest = await crypto.subtle.digest('SHA-256', encoded);
-
-		return Array.from(new Uint8Array(digest))
-			.map((value) => value.toString(16).padStart(2, '0'))
-			.join('');
-	}
-
-	async function getCanvasFingerprint(): Promise<string> {
-		try {
-			const canvas = document.createElement('canvas');
-			canvas.width = 280;
-			canvas.height = 80;
-
-			const context = canvas.getContext('2d');
-			if (!context) return 'Unavailable';
-
-			context.textBaseline = 'top';
-			context.font = '16px "Times New Roman"';
-			context.fillStyle = '#1a1a1a';
-			context.fillRect(0, 0, 280, 80);
-			context.fillStyle = '#f6c344';
-			context.fillText('amiunique-like fingerprint sample', 12, 12);
-			context.strokeStyle = '#4b7bec';
-			context.beginPath();
-			context.arc(210, 40, 26, 0, Math.PI * 1.75, true);
-			context.stroke();
-
-			return await hashText(canvas.toDataURL());
-		} catch {
-			return 'Unavailable';
-		}
-	}
-
-	function getWebGLData(): Record<string, string> {
-		try {
-			const canvas = document.createElement('canvas');
-			const context = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-
-			if (!context || !(context instanceof WebGLRenderingContext)) {
-				return {
-					renderer: 'Unavailable',
-					vendor: 'Unavailable',
-					version: 'Unavailable',
-					shadingLanguage: 'Unavailable'
-				};
-			}
-
-			const debug = context.getExtension('WEBGL_debug_renderer_info');
-			const renderer = debug
-				? context.getParameter(debug.UNMASKED_RENDERER_WEBGL)
-				: context.getParameter(context.RENDERER);
-			const vendor = debug
-				? context.getParameter(debug.UNMASKED_VENDOR_WEBGL)
-				: context.getParameter(context.VENDOR);
-
-			return {
-				renderer: stringifyValue(renderer),
-				vendor: stringifyValue(vendor),
-				version: stringifyValue(context.getParameter(context.VERSION)),
-				shadingLanguage: stringifyValue(context.getParameter(context.SHADING_LANGUAGE_VERSION))
-			};
-		} catch {
-			return {
-				renderer: 'Unavailable',
-				vendor: 'Unavailable',
-				version: 'Unavailable',
-				shadingLanguage: 'Unavailable'
-			};
-		}
-	}
-
-	async function getBatteryStatus(): Promise<string> {
-		try {
-			const browserNavigator = navigator as NavigatorWithExtras;
-			if (!browserNavigator.getBattery) return 'Unavailable';
-
-			const battery = await browserNavigator.getBattery();
-
-			return `${Math.round(battery.level * 100)}% | charging ${battery.charging ? 'yes' : 'no'}`;
-		} catch {
-			return 'Unavailable';
-		}
-	}
-
-	async function getPermissionsSummary(): Promise<string> {
-		try {
-			if (!navigator.permissions?.query) return 'Unavailable';
-
-			const names = [
-				'geolocation',
-				'notifications',
-				'microphone',
-				'camera',
-				'clipboard-read'
-			] as PermissionName[];
-
-			const results = await Promise.all(
-				names.map(async (name) => {
-					try {
-						const permission = await navigator.permissions.query({ name });
-						return `${name}:${permission.state}`;
-					} catch {
-						return `${name}:unsupported`;
-					}
-				})
-			);
-
-			return results.join(' | ');
-		} catch {
-			return 'Unavailable';
-		}
-	}
-
-	async function getMediaDevicesSummary(): Promise<string> {
-		try {
-			if (!navigator.mediaDevices?.enumerateDevices) return 'Unavailable';
-
-			const devices = await navigator.mediaDevices.enumerateDevices();
-			const counts = devices.reduce<Record<string, number>>((accumulator, device) => {
-				accumulator[device.kind] = (accumulator[device.kind] ?? 0) + 1;
-				return accumulator;
-			}, {});
-
-			const summary = Object.entries(counts).map(([kind, count]) => `${kind}:${count}`);
-
-			return summary.length ? summary.join(' | ') : 'Unavailable';
-		} catch {
-			return 'Unavailable';
-		}
-	}
-
-	function getAudioSupport(): string {
-		try {
-			const element = document.createElement('audio');
-			if (!element.canPlayType) return 'Unavailable';
-
-			const formats = {
-				mp3: element.canPlayType('audio/mpeg'),
-				ogg: element.canPlayType('audio/ogg; codecs="vorbis"'),
-				wav: element.canPlayType('audio/wav; codecs="1"'),
-				aac: element.canPlayType('audio/aac')
-			};
-
-			return Object.entries(formats)
-				.map(([format, support]) => `${format}:${support || 'no'}`)
-				.join(' | ');
-		} catch {
-			return 'Unavailable';
-		}
-	}
-
-	function getVideoSupport(): string {
-		try {
-			const element = document.createElement('video');
-			if (!element.canPlayType) return 'Unavailable';
-
-			const formats = {
-				mp4: element.canPlayType('video/mp4; codecs="avc1.42E01E"'),
-				webm: element.canPlayType('video/webm; codecs="vp8, vorbis"'),
-				ogg: element.canPlayType('video/ogg; codecs="theora"')
-			};
-
-			return Object.entries(formats)
-				.map(([format, support]) => `${format}:${support || 'no'}`)
-				.join(' | ');
-		} catch {
-			return 'Unavailable';
-		}
-	}
-
-	function getConnectionSummary(): string {
-		const connection = (navigator as NavigatorWithExtras).connection;
-
-		if (!connection) return 'Unavailable';
-
-		return [
-			`type:${connection.effectiveType ?? 'unknown'}`,
-			`downlink:${connection.downlink ?? 'unknown'}`,
-			`rtt:${connection.rtt ?? 'unknown'}`,
-			`saveData:${connection.saveData ? 'yes' : 'no'}`
-		].join(' | ');
-	}
-
-	function getAdBlockHint(): string {
-		try {
-			const bait = document.createElement('div');
-			bait.className = 'adsbox banner_ad ad-unit';
-			bait.style.position = 'absolute';
-			bait.style.left = '-9999px';
-			document.body.appendChild(bait);
-
-			const blocked = bait.offsetHeight === 0 || getComputedStyle(bait).display === 'none';
-			bait.remove();
-
-			return blocked ? 'Likely enabled' : 'Not detected';
-		} catch {
-			return 'Unavailable';
-		}
-	}
-
-	async function collectFingerprint() {
-		status = 'Reading browser APIs...';
-
-		const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'Unavailable';
-		const now = new Date();
-		const webgl = getWebGLData();
-		const fonts = detectFonts([
-			'Arial',
-			'Courier New',
-			'Georgia',
-			'Helvetica',
-			'Impact',
-			'Segoe UI',
-			'Tahoma',
-			'Times New Roman',
-			'Trebuchet MS',
-			'Verdana'
-		]);
-		const plugins = Array.from(navigator.plugins ?? []).map((plugin) => plugin.name);
-
-		const sections: Section[] = [
-			{
-				title: 'Browser identity',
-				description: 'Low-level identifiers exposed by the navigator object.',
-				fields: [
-					{ key: 'userAgent', label: 'User agent', value: stringifyValue(navigator.userAgent) },
-					{ key: 'platform', label: 'Platform', value: stringifyValue(navigator.platform) },
-					{ key: 'vendor', label: 'Vendor', value: stringifyValue(navigator.vendor) },
-					{ key: 'languages', label: 'Languages', value: stringifyValue(navigator.languages) },
-					{ key: 'language', label: 'Primary language', value: stringifyValue(navigator.language) },
-					{ key: 'cookie', label: 'Cookies enabled', value: boolValue(navigator.cookieEnabled) },
-					{ key: 'dnt', label: 'Do not track', value: stringifyValue(navigator.doNotTrack) },
-					{
-						key: 'webdriver',
-						label: 'Automation flag',
-						value: boolValue('webdriver' in navigator ? navigator.webdriver : undefined)
-					},
-					{
-						key: 'pdf',
-						label: 'Built-in PDF viewer',
-						value: boolValue((navigator as NavigatorWithExtras).pdfViewerEnabled)
-					}
-				]
-			},
-			{
-				title: 'Screen and device',
-				description: 'Display, input and hardware information available to the page.',
-				fields: [
-					{
-						key: 'screen',
-						label: 'Screen resolution',
-						value: `${screen.width} x ${screen.height}`
-					},
-					{
-						key: 'availableScreen',
-						label: 'Available screen',
-						value: `${screen.availWidth} x ${screen.availHeight}`
-					},
-					{
-						key: 'viewport',
-						label: 'Viewport',
-						value: `${window.innerWidth} x ${window.innerHeight}`
-					},
-					{ key: 'depth', label: 'Color depth', value: `${screen.colorDepth}-bit` },
-					{
-						key: 'pixelRatio',
-						label: 'Device pixel ratio',
-						value: stringifyValue(window.devicePixelRatio)
-					},
-					{
-						key: 'touch',
-						label: 'Max touch points',
-						value: stringifyValue(navigator.maxTouchPoints)
-					},
-					{
-						key: 'memory',
-						label: 'Device memory',
-						value: stringifyValue(
-							(navigator as NavigatorWithExtras).deviceMemory
-								? `${(navigator as NavigatorWithExtras).deviceMemory} GB`
-								: undefined
-						)
-					},
-					{
-						key: 'cpu',
-						label: 'Hardware concurrency',
-						value: stringifyValue(navigator.hardwareConcurrency)
-					}
-				]
-			},
-			{
-				title: 'Environment',
-				description: 'Locale, storage and session capabilities observable in this browser.',
-				fields: [
-					{ key: 'timezone', label: 'Timezone', value: timezone },
-					{
-						key: 'utcOffset',
-						label: 'UTC offset',
-						value: `${-now.getTimezoneOffset() / 60} hours`
-					},
-					{
-						key: 'sessionStorage',
-						label: 'Session storage',
-						value: detectStorage('sessionStorage')
-					},
-					{
-						key: 'localStorage',
-						label: 'Local storage',
-						value: detectStorage('localStorage')
-					},
-					{
-						key: 'indexedDb',
-						label: 'IndexedDB',
-						value: boolValue('indexedDB' in window)
-					},
-					{
-						key: 'adblock',
-						label: 'Ad blocker hint',
-						value: getAdBlockHint()
-					},
-					{
-						key: 'connection',
-						label: 'Network information',
-						value: getConnectionSummary()
-					},
-					{
-						key: 'battery',
-						label: 'Battery status',
-						value: await getBatteryStatus()
-					}
-				]
-			},
-			{
-				title: 'Graphics and media',
-				description: 'Rendering and codec support commonly used for browser fingerprinting.',
-				fields: [
-					{
-						key: 'canvas',
-						label: 'Canvas fingerprint hash',
-						value: await getCanvasFingerprint()
-					},
-					{ key: 'webglVendor', label: 'WebGL vendor', value: webgl.vendor },
-					{ key: 'webglRenderer', label: 'WebGL renderer', value: webgl.renderer },
-					{ key: 'webglVersion', label: 'WebGL version', value: webgl.version },
-					{
-						key: 'webglShader',
-						label: 'Shading language',
-						value: webgl.shadingLanguage
-					},
-					{ key: 'audio', label: 'Audio support', value: getAudioSupport() },
-					{ key: 'video', label: 'Video support', value: getVideoSupport() }
-				]
-			},
-			{
-				title: 'Installed features',
-				description: 'Plugins, fonts, permissions and device inventory visible to the page.',
-				fields: [
-					{ key: 'plugins', label: 'Plugins', value: stringifyValue(plugins) },
-					{ key: 'fonts', label: 'Detected fonts', value: stringifyValue(fonts) },
-					{
-						key: 'permissions',
-						label: 'Permissions summary',
-						value: await getPermissionsSummary()
-					},
-					{
-						key: 'mediaDevices',
-						label: 'Media devices',
-						value: await getMediaDevicesSummary()
-					}
-				]
-			}
-		];
-
-		fingerprintSections = sections;
-		refreshedAt = new Date().toLocaleString();
-
-		const browserData = Object.fromEntries(
-			sections
-				.filter((s) => s.title in sectionKeyMap)
-				.map((s) => [
-					sectionKeyMap[s.title],
-					Object.fromEntries(s.fields.map((f) => [f.key, f.value]))
-				])
-		);
-
-		fingerprintHash = await hashText(JSON.stringify(browserData));
-		status = 'Ready';
-
-		fetch('/api/fingerprint', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ hash: fingerprintHash, browser: browserData })
-		}).catch(() => {});
-	}
-
-	async function copyToClipboard() {
-		await navigator.clipboard.writeText(jsonOutput);
-		copied = true;
-		setTimeout(() => (copied = false), 2000);
-	}
-
-	onMount(() => {
-		void collectFingerprint();
-	});
+  onMount(() => {
+    void collectFingerprint();
+  });
 </script>
 
 <svelte:head>
-	<title>Session Fingerprint</title>
-	<meta
-		name="description"
-		content="Inspect the request and browser properties exposed by the current session."
-	/>
+  <title>Session Fingerprint</title>
+  <meta
+    name="description"
+    content="Inspect the request and browser properties exposed by the current session."
+  />
 </svelte:head>
 
 <div class="page-shell">
-	<header class="hero">
-		<p class="eyebrow">Browser session snapshot</p>
-		<h1>Session fingerprint form</h1>
-		<p class="intro">
-			This page mirrors the data-collection feature of fingerprinting tools without copying the
-			source site's design. Everything shown here is read from the current request or from browser
-			APIs available in this session.
-		</p>
-	</header>
+  <header class="hero">
+    <p class="eyebrow">Browser session snapshot</p>
+    <h1>Session fingerprint form</h1>
+    <p class="intro">
+      This page mirrors the data-collection feature of fingerprinting tools without copying the
+      source site's design. Everything shown here is read from the current request or from browser
+      APIs available in this session.
+    </p>
+  </header>
 
-	<div class="toolbar">
-		<div class="meta">
-			<span class="hash-label">Hash</span>
-			<code class="hash-value">{fingerprintHash.slice(0, 16)}…</code>
-			<span class="status-badge">{status}</span>
-			<span class="refresh-time">{refreshedAt}</span>
-		</div>
-		<div class="actions">
-			<button onclick={copyToClipboard}>{copied ? 'Copied!' : 'Copy JSON'}</button>
-			<button onclick={() => void collectFingerprint()}>Refresh</button>
-		</div>
-	</div>
+  <div class="toolbar">
+    <div class="meta">
+      <span class="hash-label">Hash</span>
+      <code class="hash-value">{fingerprintHash.slice(0, 16)}…</code>
+      <span class="status-badge">{status}</span>
+      <span class="refresh-time">{refreshedAt}</span>
+    </div>
+    <div class="actions">
+      <button onclick={copyToClipboard}>{copied ? 'Copied!' : 'Copy JSON'}</button>
+      <button onclick={() => void collectFingerprint()}>Refresh</button>
+    </div>
+  </div>
 
-	<pre class="json-block"><code>{jsonOutput}</code></pre>
+  <pre class="json-block"><code>{jsonOutput}</code></pre>
 </div>
 
 <style>
-	:global(body) {
-		margin: 0;
-		background:
-			radial-gradient(circle at top, rgba(246, 196, 68, 0.18), transparent 28%),
-			linear-gradient(180deg, #f7f5ef 0%, #ebe5d5 100%);
-		color: #1f1b16;
-		font-family: 'Segoe UI', 'Tahoma', sans-serif;
-	}
+  :global(body) {
+    margin: 0;
+    background:
+      radial-gradient(circle at top, rgba(246, 196, 68, 0.18), transparent 28%),
+      linear-gradient(180deg, #f7f5ef 0%, #ebe5d5 100%);
+    color: #1f1b16;
+    font-family: 'Segoe UI', 'Tahoma', sans-serif;
+  }
 
-	.page-shell {
-		max-width: 1120px;
-		margin: 0 auto;
-		padding: 3rem 1.25rem 4rem;
-	}
+  .page-shell {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 3rem 1.25rem 4rem;
+  }
 
-	.hero {
-		margin-bottom: 2rem;
-	}
+  .hero {
+    margin-bottom: 2rem;
+  }
 
-	.eyebrow {
-		margin: 0 0 0.5rem;
-		font-size: 0.82rem;
-		font-weight: 700;
-		letter-spacing: 0.16em;
-		text-transform: uppercase;
-		color: #8a5a16;
-	}
+  .eyebrow {
+    margin: 0 0 0.5rem;
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #8a5a16;
+  }
 
-	h1 {
-		margin: 0;
-		font-size: clamp(2.25rem, 6vw, 4.4rem);
-		line-height: 0.95;
-	}
+  h1 {
+    margin: 0;
+    font-size: clamp(2.25rem, 6vw, 4.4rem);
+    line-height: 0.95;
+  }
 
-	.intro {
-		max-width: 72ch;
-		margin: 1rem 0 0;
-		font-size: 1rem;
-		line-height: 1.6;
-		color: #4f4438;
-	}
+  .intro {
+    max-width: 72ch;
+    margin: 1rem 0 0;
+    font-size: 1rem;
+    line-height: 1.6;
+    color: #4f4438;
+  }
 
-	.toolbar {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 1rem;
-		flex-wrap: wrap;
-		margin-bottom: 1.25rem;
-		padding: 0.75rem 1rem;
-		border: 1px solid rgba(31, 27, 22, 0.12);
-		border-radius: 1rem;
-		background: rgba(255, 252, 246, 0.92);
-	}
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid rgba(31, 27, 22, 0.12);
+    border-radius: 1rem;
+    background: rgba(255, 252, 246, 0.92);
+  }
 
-	.meta {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		flex-wrap: wrap;
-		font-size: 0.9rem;
-	}
+  .meta {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    font-size: 0.9rem;
+  }
 
-	.hash-label {
-		font-weight: 700;
-		color: #5a4a35;
-		font-size: 0.84rem;
-	}
+  .hash-label {
+    font-weight: 700;
+    color: #5a4a35;
+    font-size: 0.84rem;
+  }
 
-	.hash-value {
-		font-family: 'Consolas', 'Courier New', monospace;
-		font-size: 0.85rem;
-		color: #1f1b16;
-	}
+  .hash-value {
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 0.85rem;
+    color: #1f1b16;
+  }
 
-	.status-badge {
-		padding: 0.2rem 0.6rem;
-		border-radius: 999px;
-		background: #1f1b16;
-		color: #fff8e8;
-		font-size: 0.78rem;
-		font-weight: 700;
-	}
+  .status-badge {
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    background: #1f1b16;
+    color: #fff8e8;
+    font-size: 0.78rem;
+    font-weight: 700;
+  }
 
-	.refresh-time {
-		color: #655748;
-		font-size: 0.85rem;
-	}
+  .refresh-time {
+    color: #655748;
+    font-size: 0.85rem;
+  }
 
-	.actions {
-		display: flex;
-		gap: 0.5rem;
-	}
+  .actions {
+    display: flex;
+    gap: 0.5rem;
+  }
 
-	.json-block {
-		margin: 0;
-		padding: 1.5rem;
-		border: 1px solid rgba(31, 27, 22, 0.12);
-		border-radius: 1.25rem;
-		background: rgba(255, 252, 246, 0.92);
-		box-shadow: 0 18px 40px rgba(75, 62, 42, 0.08);
-		font-family: 'Consolas', 'Courier New', monospace;
-		font-size: 0.88rem;
-		line-height: 1.6;
-		overflow-x: auto;
-		white-space: pre;
-		color: #1f1b16;
-	}
+  .json-block {
+    margin: 0;
+    padding: 1.5rem;
+    border: 1px solid rgba(31, 27, 22, 0.12);
+    border-radius: 1.25rem;
+    background: rgba(255, 252, 246, 0.92);
+    box-shadow: 0 18px 40px rgba(75, 62, 42, 0.08);
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 0.88rem;
+    line-height: 1.6;
+    overflow-x: auto;
+    white-space: pre;
+    color: #1f1b16;
+  }
 
-	.json-block code {
-		font: inherit;
-	}
+  .json-block code {
+    font: inherit;
+  }
 
-	button {
-		border: 0;
-		border-radius: 999px;
-		padding: 0.85rem 1.2rem;
-		background: #1f1b16;
-		color: #fff8e8;
-		font-weight: 700;
-		cursor: pointer;
-	}
+  button {
+    border: 0;
+    border-radius: 999px;
+    padding: 0.85rem 1.2rem;
+    background: #1f1b16;
+    color: #fff8e8;
+    font-weight: 700;
+    cursor: pointer;
+  }
 
-	@media (max-width: 720px) {
-		.page-shell {
-			padding-top: 2rem;
-		}
-	}
+  @media (max-width: 720px) {
+    .page-shell {
+      padding-top: 2rem;
+    }
+  }
 </style>

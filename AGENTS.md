@@ -1,5 +1,9 @@
 # AGENTS.md
 
+## Testing
+
+No tests for this project. Do not write unit tests, integration tests, or e2e tests. Do not add testing libraries or frameworks.
+
 ## General Code Style
 
 - ES modules (`"type": "module"` in package.json). Use `import`/`export`, never `require`.
