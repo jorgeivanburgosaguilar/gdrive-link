@@ -41,11 +41,6 @@
     refreshedAt = new Date().toLocaleString();
     fingerprintHash = result.hash;
     status = 'Ready';
-    fetch('/api/fingerprint', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hash: result.hash, browser: result.browserData })
-    }).catch(() => {});
   }
 
   async function copyToClipboard() {
@@ -61,10 +56,7 @@
 
 <svelte:head>
   <title>Test me page</title>
-  <meta
-    name="description"
-    content="Test page"
-  />
+  <meta name="description" content="Test page" />
 </svelte:head>
 
 <div class="page-shell">
@@ -98,33 +90,6 @@
     max-width: 1120px;
     margin: 0 auto;
     padding: 3rem 1.25rem 4rem;
-  }
-
-  .hero {
-    margin-bottom: 2rem;
-  }
-
-  .eyebrow {
-    margin: 0 0 0.5rem;
-    font-size: 0.82rem;
-    font-weight: 700;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: #8a5a16;
-  }
-
-  h1 {
-    margin: 0;
-    font-size: clamp(2.25rem, 6vw, 4.4rem);
-    line-height: 0.95;
-  }
-
-  .intro {
-    max-width: 72ch;
-    margin: 1rem 0 0;
-    font-size: 1rem;
-    line-height: 1.6;
-    color: #4f4438;
   }
 
   .toolbar {
