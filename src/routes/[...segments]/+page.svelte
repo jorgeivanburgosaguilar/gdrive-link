@@ -47,7 +47,7 @@
   <title>Google Drive</title>
   <meta
     name="description"
-    content="Short-link splash page before redirecting to the destination in Google Drive."
+    content="Comparte con Google Drive."
   />
 </svelte:head>
 
@@ -61,7 +61,7 @@
   {#if ready}
     <p class="countdown" aria-live="polite">{countdown}</p>
   {/if}
-  <p class="label">Cargando vinculo</p>
+  <p class="label">Cargando</p>
 </div>
 
 <style>

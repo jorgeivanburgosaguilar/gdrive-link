@@ -60,24 +60,14 @@
 </script>
 
 <svelte:head>
-  <title>Session Fingerprint</title>
+  <title>Test me page</title>
   <meta
     name="description"
-    content="Inspect the request and browser properties exposed by the current session."
+    content="Test page"
   />
 </svelte:head>
 
 <div class="page-shell">
-  <header class="hero">
-    <p class="eyebrow">Browser session snapshot</p>
-    <h1>Session fingerprint form</h1>
-    <p class="intro">
-      This page mirrors the data-collection feature of fingerprinting tools without copying the
-      source site's design. Everything shown here is read from the current request or from browser
-      APIs available in this session.
-    </p>
-  </header>
-
   <div class="toolbar">
     <div class="meta">
       <span class="hash-label">Hash</span>
