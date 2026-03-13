@@ -4,7 +4,8 @@ import { db, initDb } from '$lib/server/db';
 
 export const POST: RequestHandler = async ({ request, getClientAddress }) => {
   try {
-    const { hash, browser, referer } = await request.json();
+    const body = await request.text();
+    const { hash, browser, referer } = JSON.parse(Buffer.from(body, 'base64').toString('utf-8'));
 
     if (!hash || !browser) {
       return json({ error: 'Faltan campos requeridos' }, { status: 400 });
