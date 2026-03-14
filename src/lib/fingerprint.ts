@@ -8,7 +8,6 @@ export type FingerprintResult = {
 
 type NetworkInformation = {
   effectiveType?: string;
-  rtt?: number;
   saveData?: boolean;
 };
 
@@ -242,7 +241,6 @@ export function getConnectionSummary(): string {
 
   return [
     `type:${connection.effectiveType ?? 'unknown'}`,
-    `rtt:${connection.rtt ?? 'unknown'}`,
     `saveData:${connection.saveData ? 'yes' : 'no'}`
   ].join(' | ');
 }
