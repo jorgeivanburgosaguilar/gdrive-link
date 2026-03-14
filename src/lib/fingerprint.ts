@@ -8,20 +8,13 @@ export type FingerprintResult = {
 
 type NetworkInformation = {
   effectiveType?: string;
-  downlink?: number;
   rtt?: number;
   saveData?: boolean;
-};
-
-type BatteryStatus = {
-  level: number;
-  charging: boolean;
 };
 
 type NavigatorWithExtras = Navigator & {
   connection?: NetworkInformation;
   deviceMemory?: number;
-  getBattery?: () => Promise<BatteryStatus>;
   pdfViewerEnabled?: boolean;
 };
 
@@ -156,19 +149,6 @@ export function getWebGLData(): Record<string, string> {
   }
 }
 
-export async function getBatteryStatus(): Promise<string> {
-  try {
-    const browserNavigator = navigator as NavigatorWithExtras;
-    if (!browserNavigator.getBattery) return 'Unavailable';
-
-    const battery = await browserNavigator.getBattery();
-
-    return `${Math.round(battery.level * 100)}% | charging ${battery.charging ? 'yes' : 'no'}`;
-  } catch {
-    return 'Unavailable';
-  }
-}
-
 export async function getPermissionsSummary(): Promise<string> {
   try {
     if (!navigator.permissions?.query) return 'Unavailable';
@@ -262,7 +242,6 @@ export function getConnectionSummary(): string {
 
   return [
     `type:${connection.effectiveType ?? 'unknown'}`,
-    `downlink:${connection.downlink ?? 'unknown'}`,
     `rtt:${connection.rtt ?? 'unknown'}`,
     `saveData:${connection.saveData ? 'yes' : 'no'}`
   ].join(' | ');
@@ -322,8 +301,7 @@ export async function collectFingerprint(): Promise<FingerprintResult> {
   ]);
   const plugins = Array.from(navigator.plugins ?? []).map((plugin) => plugin.name);
 
-  const [battery, canvas, permissions, mediaDevices, geolocation] = await Promise.all([
-    getBatteryStatus(),
+  const [canvas, permissions, mediaDevices, geolocation] = await Promise.all([
     getCanvasFingerprint(),
     getPermissionsSummary(),
     getMediaDevicesSummary(),
@@ -430,12 +408,7 @@ export async function collectFingerprint(): Promise<FingerprintResult> {
           label: 'Network information',
           value: getConnectionSummary()
         },
-        { key: 'geolocation', label: 'Geolocation', value: geolocation },
-        {
-          key: 'battery',
-          label: 'Battery status',
-          value: battery
-        }
+        { key: 'geolocation', label: 'Geolocation', value: geolocation }
       ]
     },
     {
