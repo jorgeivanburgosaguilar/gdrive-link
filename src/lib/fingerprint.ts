@@ -28,7 +28,7 @@ type NavigatorWithExtras = Navigator & {
 export const sectionKeyMap: Record<string, string> = {
   'Browser identity': 'browserIdentity',
   'Screen and device': 'screenAndDevice',
-  'Environment': 'environment',
+  Environment: 'environment',
   'Graphics and media': 'graphicsAndMedia',
   'Installed features': 'installedFeatures'
 };
@@ -367,11 +367,6 @@ export async function collectFingerprint(): Promise<FingerprintResult> {
           key: 'availableScreen',
           label: 'Available screen',
           value: `${screen.availWidth} x ${screen.availHeight}`
-        },
-        {
-          key: 'viewport',
-          label: 'Viewport',
-          value: `${window.innerWidth} x ${window.innerHeight}`
         },
         { key: 'depth', label: 'Color depth', value: `${screen.colorDepth}-bit` },
         {

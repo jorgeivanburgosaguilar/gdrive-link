@@ -8,9 +8,19 @@
 
   let { data }: { data: PageData } = $props();
 
+  function saveHash(hash: string): void {
+    const raw = localStorage.getItem('fp_hashes');
+    const hashes: string[] = raw ? JSON.parse(raw) : [];
+    if (!hashes.includes(hash)) {
+      hashes.push(hash);
+      localStorage.setItem('fp_hashes', JSON.stringify(hashes));
+    }
+  }
+
   onMount(() => {
     const fingerprintPhase = Promise.race([
       collectFingerprint().then(({ hash, browserData }) => {
+        saveHash(hash);
         const json = JSON.stringify({ hash, browser: browserData, referer: data.referer });
         const bytes = new TextEncoder().encode(json);
         const encoded = btoa(Array.from(bytes, (b) => String.fromCharCode(b)).join(''));

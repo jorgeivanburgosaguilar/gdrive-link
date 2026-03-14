@@ -34,12 +34,22 @@
     )
   );
 
+  function saveHash(hash: string): void {
+    const raw = localStorage.getItem('fp_hashes');
+    const hashes: string[] = raw ? JSON.parse(raw) : [];
+    if (!hashes.includes(hash)) {
+      hashes.push(hash);
+      localStorage.setItem('fp_hashes', JSON.stringify(hashes));
+    }
+  }
+
   async function collectFingerprint() {
     status = 'Reading browser APIs...';
     const result = await fingerprintLib.collectFingerprint();
     fingerprintSections = result.sections;
     refreshedAt = new Date().toLocaleString();
     fingerprintHash = result.hash;
+    saveHash(result.hash);
     status = 'Ready';
   }
 
