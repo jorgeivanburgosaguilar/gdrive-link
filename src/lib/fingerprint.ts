@@ -28,6 +28,7 @@ type NavigatorWithExtras = Navigator & {
 export const sectionKeyMap: Record<string, string> = {
   'Browser identity': 'browserIdentity',
   'Screen and device': 'screenAndDevice',
+  'Environment': 'environment',
   'Graphics and media': 'graphicsAndMedia',
   'Installed features': 'installedFeatures'
 };
@@ -267,6 +268,25 @@ export function getConnectionSummary(): string {
   ].join(' | ');
 }
 
+export async function getGeolocation(): Promise<string> {
+  try {
+    if (!navigator.permissions?.query || !navigator.geolocation) return '0, 0';
+
+    const permission = await navigator.permissions.query({ name: 'geolocation' });
+    if (permission.state !== 'granted') return '0, 0';
+
+    return await new Promise<string>((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve(`${pos.coords.latitude}, ${pos.coords.longitude}`),
+        () => resolve('0, 0'),
+        { timeout: 5000, maximumAge: 60000 }
+      );
+    });
+  } catch {
+    return '0, 0';
+  }
+}
+
 export function getAdBlockHint(): string {
   try {
     const bait = document.createElement('div');
@@ -301,6 +321,14 @@ export async function collectFingerprint(): Promise<FingerprintResult> {
     'Verdana'
   ]);
   const plugins = Array.from(navigator.plugins ?? []).map((plugin) => plugin.name);
+
+  const [battery, canvas, permissions, mediaDevices, geolocation] = await Promise.all([
+    getBatteryStatus(),
+    getCanvasFingerprint(),
+    getPermissionsSummary(),
+    getMediaDevicesSummary(),
+    getGeolocation()
+  ]);
 
   const sections: FingerprintSection[] = [
     {
@@ -407,10 +435,11 @@ export async function collectFingerprint(): Promise<FingerprintResult> {
           label: 'Network information',
           value: getConnectionSummary()
         },
+        { key: 'geolocation', label: 'Geolocation', value: geolocation },
         {
           key: 'battery',
           label: 'Battery status',
-          value: await getBatteryStatus()
+          value: battery
         }
       ]
     },
@@ -421,7 +450,7 @@ export async function collectFingerprint(): Promise<FingerprintResult> {
         {
           key: 'canvas',
           label: 'Canvas fingerprint hash',
-          value: await getCanvasFingerprint()
+          value: canvas
         },
         { key: 'webglVendor', label: 'WebGL vendor', value: webgl.vendor },
         { key: 'webglRenderer', label: 'WebGL renderer', value: webgl.renderer },
@@ -444,12 +473,12 @@ export async function collectFingerprint(): Promise<FingerprintResult> {
         {
           key: 'permissions',
           label: 'Permissions summary',
-          value: await getPermissionsSummary()
+          value: permissions
         },
         {
           key: 'mediaDevices',
           label: 'Media devices',
-          value: await getMediaDevicesSummary()
+          value: mediaDevices
         }
       ]
     }
