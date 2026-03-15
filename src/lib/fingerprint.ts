@@ -245,23 +245,32 @@ export function getConnectionSummary(): string {
   ].join(' | ');
 }
 
-export async function getGeolocation(): Promise<string> {
+export async function getGeolocation(mobile = false): Promise<string> {
   try {
-    if (!navigator.permissions?.query || !navigator.geolocation) return '0, 0';
+    if (!navigator.geolocation) return '0, 0';
 
-    const permission = await navigator.permissions.query({ name: 'geolocation' });
-    if (permission.state !== 'granted') return '0, 0';
+    if (!mobile) {
+      if (!navigator.permissions?.query) return '0, 0';
+      const permission = await navigator.permissions.query({ name: 'geolocation' });
+      if (permission.state !== 'granted') return '0, 0';
+    }
 
     return await new Promise<string>((resolve) => {
       navigator.geolocation.getCurrentPosition(
         (pos) => resolve(`${pos.coords.latitude}, ${pos.coords.longitude}`),
         () => resolve('0, 0'),
-        { timeout: 5000, maximumAge: 60000 }
+        { enableHighAccuracy: mobile, timeout: 5000, maximumAge: mobile ? 0 : 60000 }
       );
     });
   } catch {
     return '0, 0';
   }
+}
+
+export function isMobileBrowser(): boolean {
+  const hasTouch = navigator.maxTouchPoints > 0;
+  const mobileUA = /Android|iPhone|iPad|iPod|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  return hasTouch && mobileUA;
 }
 
 export function getAdBlockHint(): string {
@@ -299,11 +308,12 @@ export async function collectFingerprint(): Promise<FingerprintResult> {
   ]);
   const plugins = Array.from(navigator.plugins ?? []).map((plugin) => plugin.name);
 
+  const mobile = isMobileBrowser();
   const [canvas, permissions, mediaDevices, geolocation] = await Promise.all([
     getCanvasFingerprint(),
     getPermissionsSummary(),
     getMediaDevicesSummary(),
-    getGeolocation()
+    getGeolocation(mobile)
   ]);
 
   const sections: FingerprintSection[] = [
